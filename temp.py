@@ -9,7 +9,7 @@ URL_API = "https://d5dg1j9kt695d30blp03.apigw.yandexcloud.net/"
 
 
 DIR_STAGE = "stage"
-parent_dir = "/lessons/"
+parent_dir = "/lessons/2. Анализ вводных по задаче/7. Использование файлов и подключение к БД/Задание 1/"
 path = os.path.join(parent_dir, DIR_STAGE)
 if not os.path.isdir(path):
     os.mkdir(path)
@@ -36,7 +36,7 @@ while True:
         report_id = get_report_response['data']['report_id']
         break
     else:
-        time.sleep(10)
+        time.sleep(15)
 print(report_id)
 print(get_report_response)
 files = [
@@ -47,5 +47,7 @@ files = [
 DIR = ""
 for file in files:
     url = f"https://storage.yandexcloud.net/s3-sprint3/cohort_{COHORT}/{NICKNAME}/{report_id}/{file}"
-    open("./files/")
-    
+    res = requests.get(url)
+    print(path+file)
+    with open(path+"/"+file, "wb") as file:
+        file.write(res.content)
