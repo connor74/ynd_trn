@@ -1,14 +1,20 @@
-from airflow import DAG
-from airflow.providers.http.operators.http import SimpleHttpOperator
-from airflow.hooks.base import BaseHook
-from airflow.operators.python import PythonOperator
-
 import datetime
 import requests
 import json
 import time
 import os
 import psycopg2, psycopg2.extras
+import pandas as pd
+
+
+from airflow import DAG
+from airflow.providers.http.operators.http import SimpleHttpOperator
+from airflow.hooks.base import BaseHook
+from airflow.operators.python import PythonOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.providers.postgres.operators.postgres import PostgresOperator
+
+
 
 dag = DAG(
     dag_id='533_api_generate_report',
@@ -21,6 +27,7 @@ dag = DAG(
 )
 business_dt = {'dt':'2022-05-06'}
 
+pg_conn_id = 'pg_connection'
 
 API_KEY = "5f55e6c0-e9e5-4a9c-b313-63c01fc31460"
 NICKNAME = "kurzanovart"
@@ -37,6 +44,13 @@ headers = {
     "X-Nickname": NICKNAME,
     "X-Cohort": COHORT
 }
+
+files = [
+        "customer_research",
+        "user_order_log",
+        "user_activity_log",
+    ]
+
 
 
 def create_files_request(headers, **kwargs):
@@ -65,57 +79,75 @@ def generate_report(headers, **kwargs):
     print(report_id)
     ti.xcom_push(value=report_id, key='report_id')
 
-def download_files(**kwargs):
+def download_files(files, **kwargs):
     ti = kwargs['ti']
-    path = os.path.join(parent_dir, DIR_STAGE)
-    if not os.path.isdir(path):
-        os.mkdir(path)
+    #path = os.path.join(parent_dir, DIR_STAGE)
+    if not os.path.isdir(STAGE_DIR):
+        os.mkdir(STAGE_DIR)
 
     files = [
-        "customer_research.csv",
-        "user_order_log.csv",
-        "user_activity_log.csv",
+        "customer_research",
+        "user_order_log",
+        "user_activity_log",
     ]
     report_id = ti.xcom_pull(key="report_id")
     url = "https://storage.yandexcloud.net/s3-sprint3-static/lessons/"
     for file in files:
-        #url = f"https://storage.yandexcloud.net/s3-sprint3/cohort_{COHORT}/{NICKNAME}/{report_id}/{file}"
-        url = f"https://storage.yandexcloud.net/s3-sprint3-static/lessons/{file}"
+        #url = f"https://storage.yandexcloud.net/s3-sprint3/cohort_{COHORT}/{NICKNAME}/{report_id}/{file}.csv"
+        url = f"https://storage.yandexcloud.net/s3-sprint3-static/lessons/{file}.csv"
         res = requests.get(url)
-        print(path+file)
-        with open(path+"/"+file, "wb") as file:
+        with open(STAGE_DIR+"/"+file+".csv", "wb") as file:
             file.write(res.content)
 
-def load_file_to_pg(file):
-
+def load_file_to_pg(file, engine, schema):
+    table = file
     df = pd.read_csv(f"{STAGE_DIR}{file}.csv" )
 
-    cols = ','.join(list(df.columns))
-    insert_stmt = f"INSERT INTO stage.{file} ({*ваш код здесь*}) VALUES %s"
+    postgres_hook = PostgresHook(pg_conn_id)
+    engine = postgres_hook.get_sqlalchemy_engine()
+    df.to_sql(table, engine, schema=schema, if_exists='append', index=False)
 
-    pg_conn = psycopg2.connect(*ваш код здесь*)
-    cur = pg_conn.cursor()
 
-    psycopg2.extras.execute_values(cur, insert_stmt, df.values)
-    pg_conn.commit()
-
-    cur.close()
-    pg_conn.close() 
 
 
 create_customer_research = PostgresOperator(
         task_id="create_customer_research",
-        postgres_conn_id="pg_connection",
+        postgres_conn_id=pg_conn_id,
         sql="""
-            CREATE TABLE IF NOT EXISTS stage.customer_research (
-                date_id datetime,
-                category_id int,
-                geo_id int,
-                sales_qty bigint,
-                sales_amt decimal(10, 2));
+            DROP TABLE IF EXISTS stage.customer_research;
+            CREATE TABLE stage.customer_research(
+                ID                   serial ,
+                date_id              TIMESTAMP ,
+                category_id          INT ,
+                geo_id               INT ,
+                sales_qty            INT ,
+                sales_amt            NUMERIC(14,2),
+                PRIMARY KEY (ID)
+            );     
         """,
     )
 
+create_user_order_log= PostgresOperator(
+        task_id="create_user_order_log",
+        postgres_conn_id=pg_conn_id,
+        sql="""
+            DROP TABLE IF EXISTS stage.user_order_log; 
+            CREATE TABLE stage.user_order_log (
+                id                 serial,
+                date_time          TIMESTAMP,
+                city_id            INT,
+                city_name          VARCHAR(100),
+                customer_id        BIGINT,
+                first_name         VARCHAR(100),
+                last_name          VARCHAR(100),
+                item_id            INT,
+                item_name          VARCHAR(100),
+                quantity           BIGINT,
+                payment_amount     NUMERIC(14,2),
+                PRIMARY KEY (id)
+            );     
+        """,
+    )
 
 create_files_request = PythonOperator(task_id='create_files_request',
                                         python_callable=create_files_request,
@@ -127,6 +159,23 @@ generate_files = PythonOperator(task_id='generate_files',
                                         dag=dag)
 download_files = PythonOperator(task_id='download_files',
                                         python_callable=download_files,
-                                        dag=dag)                                    
+                                        op_kwargs={"files": files},
+                                        dag=dag) 
+to_sql_customer_research = PythonOperator(task_id='to_sql_customer_research',
+                                        python_callable=load_file_to_pg,
+                                        op_kwargs={
+                                            "file": files[0],
+                                            "engine": "de",
+                                            "schema": "stage",                                            
+                                            },
+                                        dag=dag)  
+to_sql_user_order_log = PythonOperator(task_id='to_sql_user_order_log',
+                                        python_callable=load_file_to_pg,
+                                        op_kwargs={
+                                            "file": files[1],
+                                            "engine": "de",
+                                            "schema": "stage",                                            
+                                            },
+                                        dag=dag)                                  
 
-create_files_request >> generate_files >> download_files >> create_customer_research
+create_files_request >> generate_files >> download_files >> [create_customer_research, create_user_order_log] >> to_sql_customer_research >> to_sql_user_order_log
