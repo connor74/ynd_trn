@@ -149,33 +149,70 @@ create_user_order_log= PostgresOperator(
         """,
     )
 
-create_files_request = PythonOperator(task_id='create_files_request',
-                                        python_callable=create_files_request,
-                                        op_kwargs={"headers": headers},
-                                        dag=dag)
-generate_files = PythonOperator(task_id='generate_files',
-                                        python_callable=generate_report,
-                                        op_kwargs={"headers": headers},
-                                        dag=dag)
-download_files = PythonOperator(task_id='download_files',
-                                        python_callable=download_files,
-                                        op_kwargs={"files": files},
-                                        dag=dag) 
-to_sql_customer_research = PythonOperator(task_id='to_sql_customer_research',
-                                        python_callable=load_file_to_pg,
-                                        op_kwargs={
-                                            "file": files[0],
-                                            "engine": "de",
-                                            "schema": "stage",                                            
-                                            },
-                                        dag=dag)  
-to_sql_user_order_log = PythonOperator(task_id='to_sql_user_order_log',
-                                        python_callable=load_file_to_pg,
-                                        op_kwargs={
-                                            "file": files[1],
-                                            "engine": "de",
-                                            "schema": "stage",                                            
-                                            },
-                                        dag=dag)                                  
+create_user_activity_log = PostgresOperator(
+        task_id="create_user_activity_log",
+        postgres_conn_id=pg_conn_id,
+        sql="""
+            DROP TABLE IF EXISTS stage.user_activity_log; 
+            CREATE TABLE stage.user_activity_log (
+                id                 serial,
+                date_time          TIMESTAMP,
+                action_id          INT,
+                customer_id        BIGINT,
+                quantity           BIGINT,
+                PRIMARY KEY (id)
+            );     
+        """,
+    )
 
-create_files_request >> generate_files >> download_files >> [create_customer_research, create_user_order_log] >> to_sql_customer_research >> to_sql_user_order_log
+
+create_files_request = PythonOperator(
+    task_id='create_files_request',
+    python_callable=create_files_request,
+    op_kwargs={"headers": headers},
+    dag=dag
+)
+generate_files = PythonOperator(
+    task_id='generate_files',
+    python_callable=generate_report,
+    op_kwargs={"headers": headers},
+    dag=dag
+)
+download_files = PythonOperator(
+    task_id='download_files',
+    python_callable=download_files,
+    op_kwargs={"files": files},
+    dag=dag
+) 
+to_sql_customer_research = PythonOperator(
+    task_id='to_sql_customer_research',
+    python_callable=load_file_to_pg,
+    op_kwargs={
+        "file": files[0],
+        "engine": "de",
+        "schema": "stage",                                            
+    },
+    dag=dag
+)  
+to_sql_user_order_log = PythonOperator(
+    task_id='to_sql_user_order_log',
+    python_callable=load_file_to_pg,
+    op_kwargs={
+        "file": files[1],
+        "engine": "de",
+        "schema": "stage",                                            
+    },
+    dag=dag
+)   
+to_sql_user_activity_log = PythonOperator(
+    task_id='to_sql_user_activity_log',
+    python_callable=load_file_to_pg,
+    op_kwargs={
+        "file": files[2],
+        "engine": "de",
+        "schema": "stage",                                            
+    },
+    dag=dag
+)                                   
+
+create_files_request >> generate_files >> download_files >> [create_customer_research, create_user_order_log, create_user_activity_log] >> to_sql_customer_research >> to_sql_user_order_log >> to_sql_user_activity_log
