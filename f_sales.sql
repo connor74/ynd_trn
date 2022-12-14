@@ -7,7 +7,7 @@ SELECT
     quantity,
     CASE 
         WHEN status = 'refunded'  THEN payment_amount * (-1)
-        ELSE else payment_amount
+        ELSE payment_amount
     END AS payment_amount, 
     status
 FROM staging.user_order_log uol
