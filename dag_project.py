@@ -159,7 +159,7 @@ with DAG(
 
     upload_user_order = PythonOperator(
         task_id='upload_user_order',
-        python_callable=upload_data_to_staging,
+        python_callable=upload_base_data_to_staging,
         op_kwargs={'date': business_dt,
                    'filename': 'user_order_log.csv',
                    'pg_table': 'user_order_log',
