@@ -27,11 +27,10 @@ headers = {
     'Content-Type': 'application/x-www-form-urlencoded'
 }
 
-tables_migration = """
+sql_tables_migration = """
     ALTER TABLE staging.user_order_log ADD COLUMN IF NOT EXISTS STATUS VARCHAR(10) DEFAULT 'shipped';
     ALTER TABLE mart.f_sales ADD COLUMN IF NOT EXISTS STATUS VARCHAR(10) DEFAULT 'shipped';
 """
-
 
 def generate_report(ti):
     print('Making request generate_report')
@@ -78,9 +77,33 @@ def get_increment(date, ti):
     increment_id = json.loads(response.content)['data']['increment_id']
     if not increment_id:
         raise ValueError(f'Increment is empty. Most probably due to error in API call.')
-    
+
     ti.xcom_push(key='increment_id', value=increment_id)
     print(f'increment_id={increment_id}')
+#----------------------------------------------------------------------------------------------------------------------
+
+
+def upload_base_data_to_staging(filename, pg_table, pg_schema, ti):
+    is_empty = ti.xcom_pull(key='is_empty')
+    if is_empty:
+        s3_base_filename = f"https://storage.yandexcloud.net/s3-sprint3-static/lessons/{filename}"
+        print(s3_base_filename)
+        response = requests.get(s3_base_filename)
+        response.raise_for_status()
+        open(f"{s3_base_filename}", "wb").write(response.content)
+        print(response.content)
+
+        df = pd.read_csv(s3_base_filename)
+        df = df.drop('id', axis=1)
+        df = df.drop_duplicates(subset=['uniq_id'])
+        postgres_hook = PostgresHook(postgres_conn_id)
+        engine = postgres_hook.get_sqlalchemy_engine()
+        row_count = df.to_sql(pg_table, engine, schema=pg_schema, if_exists='append', index=False)
+        print(f'{row_count} rows was inserted')
+        if row_count > 0:
+            ti.xcom_push(key='is_empty', value=1)
+
+#----------------------------------------------------------------------------------------------------------------------
 
 
 def upload_data_to_staging(filename, date, pg_table, pg_schema, ti):
@@ -95,8 +118,8 @@ def upload_data_to_staging(filename, date, pg_table, pg_schema, ti):
     print(response.content)
 
     df = pd.read_csv(local_filename)
-    df=df.drop('id', axis=1)
-    df=df.drop_duplicates(subset=['uniq_id'])
+    df = df.drop('id', axis=1)
+    df = df.drop_duplicates(subset=['uniq_id'])
 
     if 'status' not in df.columns:
         df['status'] = 'shipped'
@@ -125,11 +148,6 @@ with DAG(
         start_date=datetime.today() - timedelta(days=7),
         end_date=datetime.today() - timedelta(days=1),
 ) as dag:
-    migrate_tables = PostgresOperator(
-        task_id='migrate_tables',
-        postgres_conn_id=postgres_conn_id,
-        sql=tables_migration
-    )
 
     generate_report = PythonOperator(
         task_id='generate_report',
@@ -138,6 +156,20 @@ with DAG(
     get_report = PythonOperator(
         task_id='get_report',
         python_callable=get_report)
+
+    upload_user_order = PythonOperator(
+        task_id='upload_user_order',
+        python_callable=upload_data_to_staging,
+        op_kwargs={'date': business_dt,
+                   'filename': 'user_order_log.csv',
+                   'pg_table': 'user_order_log',
+                   'pg_schema': 'staging'})
+
+    migrate_tables = PostgresOperator(
+        task_id='migrate_tables',
+        postgres_conn_id=postgres_conn_id,
+        sql=sql_tables_migration
+    )
 
     get_increment = PythonOperator(
         task_id='get_increment',
@@ -176,8 +208,9 @@ with DAG(
 
     (
             generate_report
-            >> migrate_tables
             >> get_report
+            >> upload_user_order
+            >> migrate_tables
             >> get_increment
             >> upload_user_order_inc
             >> [update_d_item_table, update_d_city_table, update_d_customer_table]
