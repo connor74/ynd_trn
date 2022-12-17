@@ -3,7 +3,7 @@ WITH
 		SELECT *
 	    FROM mart.f_sales
 	    JOIN mart.d_calendar ON f_sales.date_id = d_calendar.date_id
-	    WHERE week_of_year = 50
+	    WHERE week_of_year = = DATE_PART('week', '{{ds}}'::DATE)
 	 ),
 	 new_customers AS (
 	 	SELECT 
