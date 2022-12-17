@@ -211,7 +211,7 @@ with DAG(
         parameters={"date": {business_dt}}
     )
 
-    update_f_customer_retention.sql = PostgresOperator(
+    update_f_customer_retention = PostgresOperator(
         task_id='update_f_customer_retention',
         postgres_conn_id=postgres_conn_id,
         sql="sql/mart.f_customer_retention.sql",
