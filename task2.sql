@@ -28,20 +28,32 @@ WITH
 	 WHERE status = 'refunded'
 	 GROUP BY customer_id
 )
+INSERT INTO mart.f_customer_retention (
+    new_customers_count, 
+    new_customers_revenue, 
+    returning_customers_count, 
+    returning_customers_revenue, 
+    refunded_customer_count, 
+    customers_refunded, 
+    period_id, 
+    period_name, 
+    item_id, 
+    city_id
+)
 SELECT 
 	COALESCE(new_customers.customers, 0)     AS new_customers_count,
-    COALESCE(new_customers.revenue, 0)         AS new_customers_revenue,
-    COALESCE(returning_customers.customers, 0) AS returning_customers_count,
-    COALESCE(returning_customers.revenue, 0)    AS returning_customers_revenue,
-    COALESCE(refunded_customers.customers, 0)   AS refunded_customers_count,
-    COALESCE(refunded_customers.refunded, 0)    AS customers_refunded,
-    COALESCE(new_customers.week_of_year, returning_customers.week_of_year, refunded_customers.week_of_year) as period_id,
-    'week' as period_name,
-    COALESCE(new_customers.item_id, returning_customers.item_id, refunded_customers.item_id) AS item_id,
-    COALESCE(new_customers.city_id, returning_customers.city_id, refunded_customers.city_id) AS city_id
+	COALESCE(new_customers.revenue, 0)         AS new_customers_revenue,
+	COALESCE(returning_customers.customers, 0) AS returning_customers_count,
+	COALESCE(returning_customers.revenue, 0)    AS returning_customers_revenue,
+	COALESCE(refunded_customers.customers, 0)   AS refunded_customers_count,
+	COALESCE(refunded_customers.refunded, 0)    AS customers_refunded,
+	COALESCE(new_customers.week_of_year, returning_customers.week_of_year, refunded_customers.week_of_year) as period_id,
+	'week' as period_name,
+	COALESCE(new_customers.item_id, returning_customers.item_id, refunded_customers.item_id) AS item_id,
+	COALESCE(new_customers.city_id, returning_customers.city_id, refunded_customers.city_id) AS city_id
 FROM (
 	SELECT 
-		week_of_year,
+	week_of_year,
         city_id,
         item_id,
         sum(payment_amount) AS revenue,
