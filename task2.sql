@@ -1,4 +1,15 @@
 -- mart.f_customer_retention.sql
+
+DELETE
+FROM mart.f_customer_retention
+WHERE period_id=(
+	SELECT week_of_year 
+	FROM mart.d_calendar 
+	WHERE date_actual = '{{ds}}'::DATE
+);
+
+
+
 CREATE TABLE IF NOT EXISTS mart.f_customer_retention (
 	new_customers_count INT, 
 	new_customers_revenue NUMERIC(10, 2), 
