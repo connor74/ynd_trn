@@ -174,7 +174,8 @@ with DAG(
     get_increment = PythonOperator(
         task_id='get_increment',
         python_callable=get_increment,
-        op_kwargs={'date': business_dt})
+        op_kwargs={'date': business_dt}
+    )
 
     upload_user_order_inc = PythonOperator(
         task_id='upload_user_order_inc',
@@ -182,22 +183,26 @@ with DAG(
         op_kwargs={'date': business_dt,
                    'filename': 'user_order_log_inc.csv',
                    'pg_table': 'user_order_log',
-                   'pg_schema': 'staging'})
+                   'pg_schema': 'staging'}
+    )
 
     update_d_item_table = PostgresOperator(
         task_id='update_d_item',
         postgres_conn_id=postgres_conn_id,
-        sql="sql/mart.d_item.sql")
+        sql="sql/mart.d_item.sql"
+    )
 
     update_d_customer_table = PostgresOperator(
         task_id='update_d_customer',
         postgres_conn_id=postgres_conn_id,
-        sql="sql/mart.d_customer.sql")
+        sql="sql/mart.d_customer.sql"
+    )
 
     update_d_city_table = PostgresOperator(
         task_id='update_d_city',
         postgres_conn_id=postgres_conn_id,
-        sql="sql/mart.d_city.sql")
+        sql="sql/mart.d_city.sql"
+    )
 
     update_f_sales = PostgresOperator(
         task_id='update_f_sales',
