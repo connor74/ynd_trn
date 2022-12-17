@@ -1,44 +1,54 @@
+CREATE TABLE IF NOT EXISTS mart.f_customer_retention (
+	new_customers_count INT, 
+	new_customers_revenue NUMERIC(10, 2), 
+	returning_customers_count INT, 
+	returning_customers_revenue NUMERIC(10, 2), 
+	refunded_customer_count INT, 
+	customers_refunded NUMERIC(10, 2), 
+	period_id INT, 
+	period_name VARCHAR(10), 
+	item_id INT, 
+	city_id INT	
+);
+
 WITH 
 	customers AS (
 		SELECT *
-	    FROM mart.f_sales
-	    JOIN mart.d_calendar ON f_sales.date_id = d_calendar.date_id
-	    WHERE week_of_year = = DATE_PART('week', '{{ds}}'::DATE)
+	    	FROM mart.f_sales
+	    	JOIN mart.d_calendar ON f_sales.date_id = d_calendar.date_id
+	    	WHERE week_of_year = DATE_PART('week', '{{ds}}'::DATE)
 	 ),
 	 new_customers AS (
-	 	SELECT 
-	 		customer_id
-	    FROM customers
-	    WHERE status = 'shipped'
-	    GROUP BY customer_id
-	    HAVING count(*) = 1
+	 	SELECT customer_id
+	    	FROM customers
+	    	WHERE status = 'shipped'
+	    	GROUP BY customer_id
+	    	HAVING count(*) = 1
 	 ),
 	 returning_customers AS (
-	 	SELECT 
-	 		customer_id
-	    FROM customers
-	    WHERE status = 'shipped'
-	    GROUP BY customer_id
-	    HAVING count(*) > 1
+	 	SELECT customer_id
+	    	FROM customers
+	    	WHERE status = 'shipped'
+	    	GROUP BY customer_id
+	    	HAVING count(*) > 1
 	 ),
 	 refunded_customers AS (
-	 SELECT 
-	 	customer_id
-	 FROM customers
-	 WHERE status = 'refunded'
-	 GROUP BY customer_id
-)
+	 	SELECT customer_id
+	 	FROM customers
+	 	WHERE status = 'refunded'
+	 	GROUP BY customer_id
+	)
 INSERT INTO mart.f_customer_retention (
-    new_customers_count, 
-    new_customers_revenue, 
-    returning_customers_count, 
-    returning_customers_revenue, 
-    refunded_customer_count, 
-    customers_refunded, 
-    period_id, 
-    period_name, 
-    item_id, 
-    city_id
+	new_customers_count, 
+	new_customers_revenue, 
+	returning_customers_count, 
+	returning_customers_revenue, 
+	refunded_customer_count, 
+	customers_refunded, 
+	period_id, 
+	period_name, 
+	item_id, 
+	city_id
 )
 SELECT 
 	COALESCE(new_customers.customers, 0)     AS new_customers_count,
