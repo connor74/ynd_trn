@@ -1,6 +1,6 @@
 from airflow import DAG
 from datetime import datetime
-from airflow.operators.sql import SQLCheckOperator
+from airflow.operators.sql import SQLCheckOperator, SQLValueCheckOperator
 from airflow.utils.task_group import TaskGroup
 from airflow.sensors.filesystem import FileSensor
 
@@ -31,4 +31,20 @@ with DAG(
         sql="user_activity_log_isNull_check.sql", 
     )
     
-    fg1 >> sql_check >> sql_check2
+    sql_check3 = SQLValueCheckOperator(
+        task_id="check_row_count_user_order_log", 
+        sql="Select count(distinct(customer_id)) from user_order_log", 
+        pass_value=3, 
+        tolerance=0.01  
+    ) 
+    
+    sql_check4 = SQLValueCheckOperator(
+        task_id="check_row_count_user_activity_log", 
+        sql="Select count(distinct(customer_id)) from user_activity_log", 
+        pass_value=3, 
+        tolerance=0.01
+    ) 
+
+    sql_check >> sql_check2 >> sql_check3 >> sql_check4
+    
+    fg1 >> sql_check >> sql_check2 >> sql_check3 >> sql_check4
